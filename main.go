@@ -60,7 +60,7 @@ func main() {
 }
 
 func port_scan(IP string, port string) string {
-	v, e := syn_scan(IP, port)
+	v, e := tcp_scan(IP, port)
 	if e != nil {
 		if e, ok := e.(net.Error); ok && e.Timeout() {
 			return "closed/filtered"
@@ -70,8 +70,7 @@ func port_scan(IP string, port string) string {
 	return v
 }
 
-// hi! from johnathan
-func syn_scan(IP string, port string) (string, error) {
+func tcp_scan(IP string, port string) (string, error) {
 	// fmt.Println("IP is " + IP + ":" + port)
 	timeoutDuration, timeErr := time.ParseDuration("1s")
 	if timeErr != nil {
