@@ -19,6 +19,18 @@ type SafePortMap struct {
 	ports map[int]string
 }
 
+func (spm *SafePortMap) addPort(port int, body string) {
+	spm.mu.Lock()
+	spm.ports[port] = body
+	spm.mu.Unlock()
+}
+
+func (spm *SafePortMap) getPort(port int) string {
+	spm.mu.Lock()
+	defer spm.mu.Unlock()
+	return spm.ports[port]
+}
+
 func main() {
 	flag.StringVar(&IP, "n", "127.0.0.1", "IP Address/network to scan")
 	flag.Parse()
@@ -86,37 +98,7 @@ func tcp_scan(IP string, port string) (string, error) {
 	return "open", nil
 }
 
-// func ReadConnection(conn net.Conn) []byte {
-// 	tmp := make([]byte, 1024)
-// 	data := make([]byte, 0)
+// Uses raw socket
+func syn_scan(IP string, port string) (string, error) {
 
-// 	length := 0
-
-// 	for {
-// 		n, err := conn.Read(tmp)
-// 		if err != nil {
-// 			if err != io.EOF {
-// 				fmt.Println("Read error: ", err)
-// 			} else {
-// 				fmt.Println("Reached EOF")
-// 			}
-// 			break
-// 		}
-// 		data = append(data, tmp[:n]...)
-// 		length += n
-// 	}
-// 	fmt.Printf("Got %d bytes\n", length)
-// 	return data
-// }
-
-func (spm *SafePortMap) addPort(port int, body string) {
-	spm.mu.Lock()
-	spm.ports[port] = body
-	spm.mu.Unlock()
-}
-
-func (spm *SafePortMap) getPort(port int) string {
-	spm.mu.Lock()
-	defer spm.mu.Unlock()
-	return spm.ports[port]
 }
