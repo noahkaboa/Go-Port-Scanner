@@ -10,6 +10,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"golang.org/x/net/ipv4"
 )
 
 var IP string
@@ -35,7 +39,7 @@ func main() {
 	flag.StringVar(&IP, "n", "127.0.0.1", "IP Address/network to scan")
 	flag.Parse()
 
-	IP = "nmap.org"
+	IP = "64.13.134.52"
 
 	scan_results := SafePortMap{ports: make(map[int]string)}
 
@@ -72,7 +76,7 @@ func main() {
 }
 
 func port_scan(IP string, port string) string {
-	v, e := tcp_scan(IP, port)
+	v, e := syn_scan(IP, port)
 	if e != nil {
 		if e, ok := e.(net.Error); ok && e.Timeout() {
 			return "closed/filtered"
@@ -100,5 +104,96 @@ func tcp_scan(IP string, port string) (string, error) {
 
 // Uses raw socket
 func syn_scan(IP string, port string) (string, error) {
+
+	srcPortNum := 4444
+	dstPortNum, _ := strconv.Atoi(port)
+
+	fmt.Println(IP)
+	dstIP := net.ParseIP(IP)
+	if dstIP == nil {
+		fmt.Println("not ip!")
+		return "", nil
+	}
+	dstIP = dstIP.To4()
+	if dstIP == nil {
+		fmt.Println("Not v4 ip!")
+		return "", nil
+	}
+
+	packetConn, connErr := net.ListenPacket("ip4:tcp", IP)
+	if connErr != nil {
+		fmt.Println("Went wrong making the connection")
+		return "", nil
+	}
+
+	rawConn, rawErr := ipv4.NewRawConn(packetConn)
+	if rawErr != nil {
+		fmt.Println("Couldnt make a raw connection!")
+		return "", nil
+	}
+
+	srcIP := packetConn.LocalAddr()
+
+	ip := layers.IPv4{
+		SrcIP:    net.IP(srcIP.String()),
+		DstIP:    dstIP,
+		Version:  4,
+		TTL:      64,
+		Protocol: layers.IPProtocolTCP,
+	}
+
+	srcport := layers.TCPPort(srcPortNum)
+	dstport := layers.TCPPort(dstPortNum)
+
+	tcp := layers.TCP{
+		SrcPort: srcport,
+		DstPort: dstport,
+		Window:  1505,
+		Urgent:  0,
+		Seq:     11050,
+		Ack:     0,
+		ACK:     false,
+		SYN:     false,
+		FIN:     false,
+		RST:     false,
+		URG:     false,
+		ECE:     false,
+		CWR:     false,
+		NS:      false,
+		PSH:     false,
+	}
+
+	opts := gopacket.SerializeOptions{
+		FixLengths:       true,
+		ComputeChecksums: true,
+	}
+
+	tcp.SetNetworkLayerForChecksum(&ip)
+
+	ipHeaderBuf := gopacket.NewSerializeBuffer()
+	headerBufErr := ip.SerializeTo(ipHeaderBuf, opts)
+	if headerBufErr != nil {
+		fmt.Println("Couldnt serialize ip header!")
+		return "", nil
+	}
+	ipHeader, headerErr := ipv4.ParseHeader(ipHeaderBuf.Bytes())
+	if headerErr != nil {
+		fmt.Println("Couldn't parse header!")
+		return "", nil
+	}
+	tcpPayloadBuf := gopacket.NewSerializeBuffer()
+	payload := gopacket.Payload([]byte("foobar"))
+	packetErr := gopacket.SerializeLayers(tcpPayloadBuf, opts, &tcp, payload)
+	if packetErr != nil {
+		fmt.Println("Couldn't serialize the packet! ruhroh")
+		return "", nil
+	}
+
+	sendErr := rawConn.WriteTo(ipHeader, tcpPayloadBuf.Bytes(), nil)
+
+	fmt.Println("Result: ")
+	fmt.Println(sendErr)
+
+	return "Done", nil
 
 }
