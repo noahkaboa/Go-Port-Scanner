@@ -39,6 +39,7 @@ func main() {
 	flag.StringVar(&IP, "n", "127.0.0.1", "IP Address/network to scan")
 	flag.Parse()
 
+	// Nmap.org ip for testing
 	IP = "64.13.134.52"
 
 	scan_results := SafePortMap{ports: make(map[int]string)}
@@ -87,7 +88,6 @@ func port_scan(IP string, port string) string {
 }
 
 func tcp_scan(IP string, port string) (string, error) {
-	// fmt.Println("IP is " + IP + ":" + port)
 	timeoutDuration, timeErr := time.ParseDuration("1s")
 	if timeErr != nil {
 		fmt.Println("The time is wrong")
@@ -103,6 +103,7 @@ func tcp_scan(IP string, port string) (string, error) {
 }
 
 // Uses raw socket
+// INCOMPLETE
 func syn_scan(IP string, port string) (string, error) {
 
 	srcPortNum := 4444
@@ -120,22 +121,10 @@ func syn_scan(IP string, port string) (string, error) {
 		return "", nil
 	}
 
-	packetConn, connErr := net.ListenPacket("ip4:tcp", IP)
-	if connErr != nil {
-		fmt.Println("Went wrong making the connection")
-		return "", nil
-	}
-
-	rawConn, rawErr := ipv4.NewRawConn(packetConn)
-	if rawErr != nil {
-		fmt.Println("Couldnt make a raw connection!")
-		return "", nil
-	}
-
-	srcIP := packetConn.LocalAddr()
+	srcIP := GetOutboundIP()
 
 	ip := layers.IPv4{
-		SrcIP:    net.IP(srcIP.String()),
+		SrcIP:    srcIP,
 		DstIP:    dstIP,
 		Version:  4,
 		TTL:      64,
@@ -174,6 +163,8 @@ func syn_scan(IP string, port string) (string, error) {
 	headerBufErr := ip.SerializeTo(ipHeaderBuf, opts)
 	if headerBufErr != nil {
 		fmt.Println("Couldnt serialize ip header!")
+		fmt.Println(headerBufErr)
+		fmt.Println(srcIP)
 		return "", nil
 	}
 	ipHeader, headerErr := ipv4.ParseHeader(ipHeaderBuf.Bytes())
@@ -189,6 +180,21 @@ func syn_scan(IP string, port string) (string, error) {
 		return "", nil
 	}
 
+	fmt.Println(srcIP.String())
+
+	packetConn, connErr := net.ListenPacket("ip4:tcp4", srcIP.String()+"")
+	if connErr != nil {
+		fmt.Println("Went wrong making the connection")
+		fmt.Println(connErr)
+		return "", nil
+	}
+
+	rawConn, rawErr := ipv4.NewRawConn(packetConn)
+	if rawErr != nil {
+		fmt.Println("Couldnt make a raw connection!")
+		return "", nil
+	}
+
 	sendErr := rawConn.WriteTo(ipHeader, tcpPayloadBuf.Bytes(), nil)
 
 	fmt.Println("Result: ")
@@ -196,4 +202,17 @@ func syn_scan(IP string, port string) (string, error) {
 
 	return "Done", nil
 
+}
+
+// Stolen from stackoverflow
+func GetOutboundIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP
 }
